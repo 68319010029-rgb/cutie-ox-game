@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Cutie OX Game 💜</title>
+  <style>
+    :root{
+      --bg:#f3e8ff;
+      --card:#f8f0ff;
+      --accent:#a06cd5;
+      --accent2:#c39be2;
+      --muted:#735a9e;
+      --text:#2f184b;
+    }
+    *{box-sizing:border-box;font-family:'Poppins',sans-serif}
+    body{
+      margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+      background:linear-gradient(135deg,var(--accent2) 0%, var(--bg) 100%);
+      color:var(--text);
+    }
+    .wrap{width:900px;max-width:95%;display:grid;grid-template-columns:320px 1fr;gap:20px;align-items:start}
+    .card{background:var(--card);border-radius:20px;padding:20px;box-shadow:0 6px 24px rgba(128,0,255,0.2)}
+    header{display:flex;gap:10px;align-items:center}
+    header h1{margin:0;font-size:22px;color:var(--accent)}
+    .subtitle{color:var(--muted);font-size:14px}
+    .controls{display:flex;flex-direction:column;gap:12px;margin-top:10px}
+    .btn{background:var(--accent);color:white;padding:8px 12px;border:none;border-radius:10px;cursor:pointer;font-weight:600;transition:transform .2s}
+    .btn:hover{transform:translateY(-3px);}
+    .btn.secondary{background:white;color:var(--accent);border:2px solid var(--accent)}
+    .board-wrap{display:flex;flex-direction:column;gap:14px;align-items:center}
+    .board{width:330px;height:330px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;background:white;padding:10px;border-radius:16px;box-shadow:inset 0 0 10px rgba(160,108,213,0.3)}
+    .cell{display:flex;align-items:center;justify-content:center;font-size:60px;background:var(--accent2);color:white;border-radius:12px;cursor:pointer;transition:background .2s,transform .2s}
+    .cell:hover{background:var(--accent);transform:scale(1.05)}
+    .score{display:flex;gap:10px;font-weight:600;color:var(--accent)}
+    .footer{text-align:center;color:var(--muted);font-size:13px;margin-top:4px}
+
+    /* popup */
+    #popup{
+      position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+      background:rgba(47,24,75,0.4);backdrop-filter:blur(4px);z-index:100;
+    }
+    #popup .box{
+      background:white;border-radius:20px;padding:30px 40px;text-align:center;
+      box-shadow:0 8px 30px rgba(160,108,213,0.3);color:var(--text);
+      max-width:300px;animation:pop .25s ease-out;
+    }
+    #popup h2{margin:0 0 10px 0;color:var(--accent);}
+    @keyframes pop{from{transform:scale(.7);opacity:0}to{transform:scale(1);opacity:1}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <header>
+        <div style="font-size:28px">💜</div>
+        <div>
+          <h1>Cutie OX Game</h1>
+          <div class="subtitle">เกม OX สุดน่ารัก โทนม่วงพาสเทล</div>
+        </div>
+      </header>
+      <div class="controls">
+        <button class="btn" id="mode-human">เล่นกับเพื่อน 🧸</button>
+        <button class="btn secondary" id="mode-bot">เล่นกับบอท 🤖</button>
+        <div id="difficulty-row" style="display:none">
+          <p style="margin:4px 0;color:var(--muted)">เลือกระดับความยากของบอท:</p>
+          <label><input type="radio" name="difficulty" value="easy"> ง่าย 🌷</label>
+          <label><input type="radio" name="difficulty" value="medium"> ปานกลาง 🌸</label>
+          <label><input type="radio" name="difficulty" value="hard" checked> ยาก 💎</label>
+        </div>
+        <button class="btn" id="new-game">เริ่มใหม่ ✨</button>
+        <button class="btn secondary" id="share">แชร์ลิงก์ 💌</button>
+      </div>
+    </div>
+
+    <div class="card board-wrap">
+      <div class="score">
+        <div>X: <span id="score-x">0</span></div>
+        <div>O: <span id="score-o">0</span></div>
+        <div>เสมอ: <span id="score-d">0</span></div>
+      </div>
+      <div class="board" id="board"></div>
+      <div class="footer" id="log">ตานี้: X</div>
+    </div>
+  </div>
+
+  <!-- popup -->
+  <div id="popup">
+    <div class="box">
+      <h2 id="popup-msg">🎉</h2>
+      <button id="popup-ok" class="btn">ตกลง 💜</button>
+    </div>
+  </div>
+
+<script>
+const boardElem = document.getElementById('board');
+const log = document.getElementById('log');
+const scoreX = document.getElementById('score-x');
+const scoreO = document.getElementById('score-o');
+const scoreD = document.getElementById('score-d');
+const difficultyRow = document.getElementById('difficulty-row');
+
+let board = Array(9).fill('');
+let turn = 'X';
+let mode = 'human';
+let difficulty = 'hard';
+let scores = { X:0, O:0, D:0 };
+const winningCombos=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+
+// สร้างกระดาน
+for(let i=0;i<9;i++){
+  const c=document.createElement('div');
+  c.className='cell';
+  c.dataset.index=i;
+  c.addEventListener('click',()=>clickCell(i));
+  boardElem.appendChild(c);
+}
+
+// Render
+function render(){
+  document.querySelectorAll('.cell').forEach((c,i)=>c.textContent=board[i]);
+  scoreX.textContent = scores.X;
+  scoreO.textContent = scores.O;
+  scoreD.textContent = scores.D;
+}
+
+// ตรวจผู้ชนะ
+function checkWinner(b){
+  for(const [a,b1,c] of winningCombos){
+    if(b[a] && b[a]===b[b1] && b[a]===b[c]) return b[a];
+  }
+  return b.includes('')? null:'D';
+}
+
+// popup
+function showPopup(message){
+  document.getElementById('popup-msg').textContent = message;
+  document.getElementById('popup').style.display = 'flex';
+}
+document.getElementById('popup-ok').onclick = () => {
+  document.getElementById('popup').style.display = 'none';
+  board.fill('');
+  render();
+  turn='X';
+  log.textContent='ตานี้: X';
+};
+
+// คลิกเซลล์
+function clickCell(i){
+  if(board[i] || checkWinner(board)) return;
+  if(mode==='bot' && turn==='O') return;
+  board[i]=turn;
+  handleTurnEnd();
+}
+
+// จบเทิร์น
+function handleTurnEnd(){
+  const win=checkWinner(board);
+  render();
+  if(win){
+    if(win==='D'){
+      log.textContent='เสมอกัน 💕';
+      scores.D++;
+      showPopup('💕 เสมอกัน! ไม่มีใครชนะนะ 💕');
+    } else {
+      log.textContent=`${win} ชนะแล้ว! 💜`;
+      scores[win]++;
+      showPopup(`🎉 ผู้เล่น ${win} ชนะแล้ว! 💜`);
+    }
+    return;
+  }
+  turn=turn==='X'?'O':'X';
+  log.textContent='ตานี้: '+turn;
+  if(mode==='bot' && turn==='O') setTimeout(botMove,400);
+}
+
+// 🔹 ฟังก์ชัน AI (Minimax)
+function minimax(b, player) {
+  const winner = checkWinner(b);
+  if (winner === 'O') return { score: 1 };
+  if (winner === 'X') return { score: -1 };
+  if (winner === 'D') return { score: 0 };
+
+  const moves = [];
+  const empty = b.map((v, i) => v ? null : i).filter(v => v !== null);
+
+  for (let i of empty) {
+    const temp = [...b];
+    temp[i] = player;
+    const result = minimax(temp, player === 'O' ? 'X' : 'O');
+    moves.push({ index: i, score: result.score });
+  }
+
+  if (player === 'O') {
+    return moves.reduce((best, m) => m.score > best.score ? m : best);
+  } else {
+    return moves.reduce((best, m) => m.score < best.score ? m : best);
+  }
+}
+
+// บอท
+function botMove(){
+  const empty=board.map((v,i)=>v?null:i).filter(v=>v!==null);
+  let move;
+  if(difficulty==='easy'){
+    move=empty[Math.floor(Math.random()*empty.length)];
+  } else if(difficulty==='medium'){
+    move=empty.find(i=>{
+      const temp=[...board]; temp[i]='O'; return checkWinner(temp)==='O';
+    }) ?? empty.find(i=>{
+      const temp=[...board]; temp[i]='X'; return checkWinner(temp)==='X';
+    }) ?? empty[Math.floor(Math.random()*empty.length)];
+  } else {
+    move = minimax(board, 'O').index; // 💎 โหมดยากจริง
+  }
+  board[move]='O';
+  handleTurnEnd();
+}
+
+// ปุ่มต่าง ๆ
+document.getElementById('mode-human').onclick=()=>{
+  mode='human'; turn='X'; board.fill(''); render(); log.textContent='ตานี้: X'; difficultyRow.style.display='none';
+};
+document.getElementById('mode-bot').onclick=()=>{
+  mode='bot'; turn='X'; board.fill(''); render(); log.textContent='ตานี้: X'; difficultyRow.style.display='block';
+};
+document.getElementById('new-game').onclick=()=>{
+  board.fill(''); render(); turn='X'; log.textContent='ตานี้: X';
+};
+document.getElementById('share').onclick=()=>{
+  navigator.clipboard.writeText(window.location.href).then(()=>alert('คัดลอกลิงก์เรียบร้อย!'));
+};
+
+// เปลี่ยนความยาก
+document.querySelectorAll('input[name="difficulty"]').forEach(radio=>{
+  radio.addEventListener('change',e=>difficulty=e.target.value);
+});
+
+render();
+</script>
+</body>
+</html>
